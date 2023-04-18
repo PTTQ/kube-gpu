@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-gpu
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      doslab: kube-gpu
+  template:
+    metadata:
+      labels:
+        doslab: kube-gpu
+    spec:
+      terminationGracePeriodSeconds: 0
+      restartPolicy: Always
+      hostPID: true
+      containers:
+      - name: cuda-init
+        image: registry.cn-beijing.aliyuncs.com/doslab/vcuda-lib:v0.1.0
+        command: [ "/bin/sh","-c" ]
+        args: [ "cp -r /tmp/nvidia /tmp/box && sleep infinity" ]
+        volumeMounts:
+        - name: lib
+          mountPath: /tmp/box/nvidia
+      - name: kube-gpu
+        image: registry.cn-beijing.aliyuncs.com/doslab/kube-gpu:v0.2.3-amd64
+        env:
+        - name: DAEMON_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        command: ["kube-gpu"]
+        args: ["--masterUrl=", "--token="]
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /var/lib/kubelet/device-plugins
+        - name: vcuda
+          mountPath: /etc/kube-gpu/vm
+        - name: cgroup
+          mountPath: /sys/fs/cgroup
+          readOnly: true
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+      - name: vcuda
+        hostPath:
+          path: /etc/kube-gpu/vm
+      - name: lib
+        hostPath:
+          path: /etc/kube-gpu/vdriver/nvidia
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
